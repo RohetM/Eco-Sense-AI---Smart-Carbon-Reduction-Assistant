@@ -1,5 +1,9 @@
 # EcoSense AI - Smart Carbon Reduction Assistant
 
+## 🚀 Live Demo
+[View on Vercel](https://eco-sense-ai-smart-carbon-reduction-one.vercel.app/)
+
+
 ## Problem Statement
 
 People are increasingly aware of climate change but often lack personalized, actionable guidance on which of their daily habits contribute the most to their carbon footprint, and what specific changes can create the highest positive impact.
