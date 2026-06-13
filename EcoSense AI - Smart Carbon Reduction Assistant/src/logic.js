@@ -26,46 +26,65 @@ const EMISSION_FACTORS = {
   }
 };
 
-// Validates user input to prevent NaN or errors
+// Reusable Helper: Calculate monthly transport emissions
+export const calculateTransportEmissions = (type, distanceDaily, transportDays) => {
+  const factor = EMISSION_FACTORS.transport[type] ?? 0;
+  return distanceDaily * factor * transportDays * 4; // approx 4 weeks/month
+};
+
+// Reusable Helper: Calculate monthly energy emissions
+export const calculateEnergyEmissions = (electricityMonthly) => {
+  return electricityMonthly * EMISSION_FACTORS.energy.electricity;
+};
+
+// Reusable Helper: Calculate monthly lifestyle emissions
+export const calculateLifestyleEmissions = (diet, recycling) => {
+  const dietEmissions = EMISSION_FACTORS.lifestyle.diet[diet] ?? 150;
+  const recyclingEmissions = EMISSION_FACTORS.lifestyle.recycling[recycling] ?? 0;
+  return dietEmissions + recyclingEmissions;
+};
+
+// Validates user input to prevent NaN, negative numbers, or invalid fields
 export const validateInput = (data) => {
+  const safeData = data || {};
   const sanitized = {
-    transportType: data.transportType || 'car',
-    distanceDaily: Math.max(0, Number(data.distanceDaily) || 0),
-    transportDays: Math.min(7, Math.max(0, Number(data.transportDays) || 0)),
-    electricityMonthly: Math.max(0, Number(data.electricityMonthly) || 0),
-    diet: data.diet || 'mixed',
-    recycling: data.recycling || 'sometimes'
+    transportType: (safeData.transportType && typeof safeData.transportType === 'string' && EMISSION_FACTORS.transport[safeData.transportType] !== undefined)
+      ? safeData.transportType
+      : 'car',
+    distanceDaily: Math.max(0, Number(safeData.distanceDaily) || 0),
+    transportDays: Math.min(7, Math.max(0, Number(safeData.transportDays) || 0)),
+    electricityMonthly: Math.max(0, Number(safeData.electricityMonthly) || 0),
+    diet: (safeData.diet && typeof safeData.diet === 'string' && EMISSION_FACTORS.lifestyle.diet[safeData.diet] !== undefined)
+      ? safeData.diet
+      : 'mixed',
+    recycling: (safeData.recycling && typeof safeData.recycling === 'string' && EMISSION_FACTORS.lifestyle.recycling[safeData.recycling] !== undefined)
+      ? safeData.recycling
+      : 'sometimes'
   };
   return sanitized;
 };
 
 // Calculate monthly footprint based on sanitized inputs
 export const calculateFootprint = (data) => {
-  const transportDaily = data.distanceDaily * (EMISSION_FACTORS.transport[data.transportType] || 0);
-  const transportMonthly = transportDaily * data.transportDays * 4; // approx 4 weeks/month
-
-  const energyMonthly = data.electricityMonthly * EMISSION_FACTORS.energy.electricity;
-
-  let lifestyleMonthly = EMISSION_FACTORS.lifestyle.diet[data.diet] || 150;
-  lifestyleMonthly += EMISSION_FACTORS.lifestyle.recycling[data.recycling] || 0;
-
-  const total = transportMonthly + energyMonthly + lifestyleMonthly;
+  const sanitized = validateInput(data);
+  const transport = calculateTransportEmissions(sanitized.transportType, sanitized.distanceDaily, sanitized.transportDays);
+  const energy = calculateEnergyEmissions(sanitized.electricityMonthly);
+  const lifestyle = calculateLifestyleEmissions(sanitized.diet, sanitized.recycling);
+  const total = transport + energy + lifestyle;
 
   return {
-    transport: transportMonthly,
-    energy: energyMonthly,
-    lifestyle: lifestyleMonthly,
-    total: total
+    transport,
+    energy,
+    lifestyle,
+    total
   };
 };
 
 // Generate an Eco Score from 0-100
 export const getEcoScore = (totalEmissions) => {
-  // Assume a completely carbon-neutral person is 100
-  // Average person might be around 400-500 kg per month
-  // Above 800 kg is very bad (0 score)
+  const emissions = Math.max(0, Number(totalEmissions) || 0);
   const maxExpected = 800;
-  let score = 100 - ((totalEmissions / maxExpected) * 100);
+  let score = 100 - ((emissions / maxExpected) * 100);
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   let category = '';
@@ -79,13 +98,16 @@ export const getEcoScore = (totalEmissions) => {
 
 // AI Assistant Rule-Based Logic
 export const generateAIRecommendations = (data, breakdown) => {
+  const sanitizedData = validateInput(data);
+  const sanitizedBreakdown = breakdown || calculateFootprint(sanitizedData);
+
   const recommendations = [];
   let potentialReduction = 0;
 
   // Transport rules
-  if (breakdown.transport > 100 && (data.transportType === 'car' || data.transportType === 'bike')) {
-    const alternateEms = data.distanceDaily * EMISSION_FACTORS.transport.bus * data.transportDays * 4;
-    const reduction = breakdown.transport - alternateEms;
+  if (sanitizedBreakdown.transport > 100 && (sanitizedData.transportType === 'car' || sanitizedData.transportType === 'bike')) {
+    const alternateEms = calculateTransportEmissions('bus', sanitizedData.distanceDaily, sanitizedData.transportDays);
+    const reduction = sanitizedBreakdown.transport - alternateEms;
     potentialReduction += reduction;
     recommendations.push({
       title: 'Switch to Public Transport',
@@ -95,9 +117,9 @@ export const generateAIRecommendations = (data, breakdown) => {
   }
 
   // Energy rules
-  if (data.electricityMonthly > 200) {
-    const targetElectricity = data.electricityMonthly * 0.8; // 20% reduction target
-    const reduction = (data.electricityMonthly - targetElectricity) * EMISSION_FACTORS.energy.electricity;
+  if (sanitizedData.electricityMonthly > 200) {
+    const targetElectricity = sanitizedData.electricityMonthly * 0.8; // 20% reduction target
+    const reduction = calculateEnergyEmissions(sanitizedData.electricityMonthly - targetElectricity);
     potentialReduction += reduction;
     recommendations.push({
       title: 'Reduce Electricity Consumption',
@@ -107,7 +129,7 @@ export const generateAIRecommendations = (data, breakdown) => {
   }
 
   // Lifestyle rules
-  if (data.diet === 'meat_heavy') {
+  if (sanitizedData.diet === 'meat_heavy') {
     const reduction = EMISSION_FACTORS.lifestyle.diet.meat_heavy - EMISSION_FACTORS.lifestyle.diet.mixed;
     potentialReduction += reduction;
     recommendations.push({
@@ -117,8 +139,8 @@ export const generateAIRecommendations = (data, breakdown) => {
     });
   }
 
-  if (data.recycling === 'never' || data.recycling === 'sometimes') {
-    const reduction = EMISSION_FACTORS.lifestyle.recycling[data.recycling] - EMISSION_FACTORS.lifestyle.recycling.always;
+  if (sanitizedData.recycling === 'never' || sanitizedData.recycling === 'sometimes') {
+    const reduction = EMISSION_FACTORS.lifestyle.recycling[sanitizedData.recycling] - EMISSION_FACTORS.lifestyle.recycling.always;
     potentialReduction += reduction;
     recommendations.push({
       title: 'Improve Recycling Habits',
@@ -141,7 +163,9 @@ export const generateAIRecommendations = (data, breakdown) => {
 
 // Carbon Action Planner Logic
 export const generateActionPlan = (goalPercent, data, breakdown) => {
-  const targetReduction = breakdown.total * (goalPercent / 100);
+  const sanitizedData = validateInput(data);
+  const sanitizedBreakdown = breakdown || calculateFootprint(sanitizedData);
+  const targetReduction = sanitizedBreakdown.total * (Number(goalPercent) || 0) / 100;
   
   const plan = {
     goal: `${goalPercent}% Reduction`,
@@ -155,7 +179,7 @@ export const generateActionPlan = (goalPercent, data, breakdown) => {
       {
         week: 2,
         focus: 'Transport Adjustments',
-        actions: data.transportType === 'car' ? ['Carpool or use public transport twice this week', 'Combine errands into one trip'] : ['Maintain your low-emission commute', 'Walk or bike for short trips']
+        actions: sanitizedData.transportType === 'car' ? ['Carpool or use public transport twice this week', 'Combine errands into one trip'] : ['Maintain your low-emission commute', 'Walk or bike for short trips']
       },
       {
         week: 3,
@@ -182,6 +206,7 @@ export const saveUserData = (data) => {
   }
 };
 
+// Loads saved data
 export const loadUserData = () => {
   try {
     const data = localStorage.getItem('ecosense_user_data');
@@ -191,3 +216,4 @@ export const loadUserData = () => {
     return null;
   }
 };
+

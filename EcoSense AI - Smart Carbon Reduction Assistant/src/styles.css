@@ -547,3 +547,24 @@ footer {
   50% { transform: scale(1.1); }
   100% { transform: scale(1); }
 }
+
+/* Visually Hidden Screen Reader Labels */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Keyboard Accessible Focus Ring styling for accessibility score */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--secondary-color) !important;
+  outline-offset: 2px;
+}

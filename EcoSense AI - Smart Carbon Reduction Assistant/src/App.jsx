@@ -162,7 +162,7 @@ function App() {
           </Card>
         </div>
 
-        <div className="right-panel">
+        <div className="right-panel" aria-live="polite">
           {results ? (
             <>
               <div className="top-results">
@@ -198,7 +198,7 @@ function App() {
                 </Card>
               </div>
 
-              <Card title="EcoSense AI Assistant" className="glass ai-card">
+              <Card title="EcoSense AI Assistant" className="glass ai-card" aria-label="AI Sustainability Recommendations">
                 <RecommendationsList 
                   recommendations={results.recommendations} 
                   totalReduction={results.potentialReduction} 
